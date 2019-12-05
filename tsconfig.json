@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "outDir": "jsbin",
+    "target": "es2017",
+    "lib": [ "es2017" ],
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "alwaysStrict": true,
+    "strictNullChecks": true,
+    "removeComments": false,
+    "noImplicitAny": false
+  }
+}
