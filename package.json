@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test": "tsc && node jsbin sample.ts"
+  },
   "dependencies": {
     "@types/node": "12.12.14",
     "typescript": "3.7.3"

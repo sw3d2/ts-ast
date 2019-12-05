@@ -2,25 +2,25 @@ import * as ts from "typescript";
 
 function compile(fileNames: string[], options: ts.CompilerOptions): void {
   let program = ts.createProgram(fileNames, options);
-  let emitResult = program.emit();
 
-  let allDiagnostics = ts
-    .getPreEmitDiagnostics(program)
-    .concat(emitResult.diagnostics);
+  for (let file of program.getSourceFiles()) {
+    if (/node_modules/.test(file.fileName))
+      continue;
+    console.log('src file:', file.fileName);
+    ts.forEachChild(file, node => {
+      console.log('ast node:', getNodeSummary(node, file));
+    });
+  }
+}
 
-  allDiagnostics.forEach(diagnostic => {
-    if (diagnostic.file) {
-      let { line, character } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start!);
-      let message = ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
-      console.log(`${diagnostic.file.fileName} (${line + 1},${character + 1}): ${message}`);
-    } else {
-      console.log(ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"));
-    }
-  });
-
-  let exitCode = emitResult.emitSkipped ? 1 : 0;
-  console.log(`Process exiting with code '${exitCode}'.`);
-  process.exit(exitCode);
+function getNodeSummary(node: ts.Node, file: ts.SourceFile) {
+  if (ts.isFunctionDeclaration(node))
+    return node.name!.text;
+  if (ts.isVariableStatement(node))
+    return node.declarationList.declarations[0].name.getText(file);
+  if (ts.isInterfaceDeclaration(node))
+    return node.name.text;
+  return node.kind;
 }
 
 compile(process.argv.slice(2), {
