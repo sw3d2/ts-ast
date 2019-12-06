@@ -41,10 +41,12 @@ function parseTsProject(projectDir: string): void {
   for (let file of program.getSourceFiles()) {
     if (EXCLUDED_FILEPATHS.test(file.fileName))
       continue;
-    let summary = getNodeSummary(file, file)
-      .replace(projectDir, '');
-    console.log(summary);
+    let [type, name, size] = getNodeSummary(file, file);
+    name = name.replace(projectDir, '');
+    let json = JSON.stringify([type, name, size]);
+    console.log(json.replace(/\]$/, ','));
     inspectSubNodes(file, file, 1);
+    console.log('],');
   }
 }
 
@@ -53,12 +55,19 @@ function inspectSubNodes(root: ts.Node, file: ts.SourceFile, depth: number) {
     if (EXCLUDED_TSNODES.has(node.kind))
       return;
 
-    console.log(
-      INDENT_STRING.repeat(depth) +
-      getNodeSummary(node, file));
+    let deep = COMPOSITE_TSNODES.has(node.kind);
+    let [type, name, size] = getNodeSummary(node, file);
+    let json = JSON.stringify([type, name, size]);
 
-    if (COMPOSITE_TSNODES.has(node.kind))
+    if (deep) {
+      console.log(
+        INDENT_STRING.repeat(depth),
+        json.replace(/\]$/, ','));
       inspectSubNodes(node, file, depth + 1);
+      console.log(INDENT_STRING.repeat(depth), '],');
+    } else {
+      console.log(INDENT_STRING.repeat(depth), json + ',');
+    }
   });
 }
 
@@ -87,28 +96,30 @@ function parseTsConfig(projectDir: string): ts.ParsedCommandLine {
   return parsed;
 }
 
-function getNodeName(node: ts.Node, file: ts.SourceFile) {
-  if (ts.isSourceFile(node))
-    return 'file ' + node.fileName;
-  if (ts.isConstructorDeclaration(node))
-    return 'constructor()';
-  if (ts.isMethodDeclaration(node))
-    return node.name.getText(file) + '()';
-  if (ts.isFunctionDeclaration(node))
-    return 'function ' + node.name?.text + '()';
-  if (ts.isInterfaceDeclaration(node))
-    return 'interface ' + node.name.text + '{}';
-  if (ts.isClassDeclaration(node))
-    return 'class ' + node.name?.text + '{}';
-  if (ts.isModuleDeclaration(node))
-    return 'module ' + node.name.text + '{}';
-  if (ts.isMethodSignature(node))
-    return node.name.getText(file) + '()';
-  return ts.SyntaxKind[node.kind];
+function getNodeSummary(node: ts.Node, file: ts.SourceFile): [string, string, number] {
+  let [type, name] = getNodeTypeName(node, file);
+  let size = getNodeSize(node, file);
+  return [type!, name!, size];
 }
 
-function getNodeSummary(node: ts.Node, file: ts.SourceFile) {
-  return getNodeName(node, file) + ' ' + getNodeSize(node, file);
+function getNodeTypeName(node: ts.Node, file: ts.SourceFile) {
+  if (ts.isSourceFile(node))
+    return ['file', node.fileName];
+  if (ts.isConstructorDeclaration(node))
+    return ['constructor', ''];
+  if (ts.isMethodDeclaration(node))
+    return ['method', node.name.getText(file)];
+  if (ts.isFunctionDeclaration(node))
+    return ['function', node.name?.text];
+  if (ts.isInterfaceDeclaration(node))
+    return ['interface', node.name.text];
+  if (ts.isClassDeclaration(node))
+    return ['class', node.name?.text];
+  if (ts.isModuleDeclaration(node))
+    return ['module', node.name.text];
+  if (ts.isMethodSignature(node))
+    return ['method', node.name.getText(file)];
+  return [ts.SyntaxKind[node.kind] + ':' + node.kind, ''];
 }
 
 function getNodeSize(node: ts.Node, file: ts.SourceFile) {
