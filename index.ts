@@ -1,6 +1,5 @@
 import * as ts from "typescript";
 
-const INDENT_STRING = '  ';
 const TSCONFIG_FILENAME = 'tsconfig.json';
 const EXCLUDED_FILEPATHS = /\/node_modules\//;
 
@@ -31,44 +30,48 @@ const COMPOSITE_TSNODES = new Set([
   ts.SyntaxKind.InterfaceDeclaration,
 ]);
 
-function parseTsProject(projectDir: string): void {
+interface TreeNode {
+  name: string;
+  type: string;
+  size?: number;
+  children?: TreeNode[];
+}
+
+function parseTsProject(projectDir: string): TreeNode {
   if (!projectDir.endsWith('/'))
     projectDir += '/';
 
   let parsed = parseTsConfig(projectDir);
   let program = ts.createProgram(parsed.fileNames, parsed.options);
+  let tree: TreeNode = { name: projectDir, type: 'program', children: [] };
 
   for (let file of program.getSourceFiles()) {
     if (EXCLUDED_FILEPATHS.test(file.fileName))
       continue;
-    let [type, name, size] = getNodeSummary(file, file);
-    name = name.replace(projectDir, '');
-    let json = JSON.stringify([type, name, size]);
-    console.log(json.replace(/\]$/, ','));
-    inspectSubNodes(file, file, 1);
-    console.log('],');
+
+    let [type, filepath, size] = getNodeSummary(file, file);
+    let name = filepath.replace(projectDir, '');
+    let children = inspectSubNodes(file, file);
+    tree.children!.push({ name, type, size, children });
   }
+
+  return tree;
 }
 
-function inspectSubNodes(root: ts.Node, file: ts.SourceFile, depth: number) {
+function inspectSubNodes(root: ts.Node, file: ts.SourceFile): TreeNode[] {
+  let treenodes: TreeNode[] = [];
+
   ts.forEachChild(root, node => {
     if (EXCLUDED_TSNODES.has(node.kind))
       return;
 
-    let deep = COMPOSITE_TSNODES.has(node.kind);
     let [type, name, size] = getNodeSummary(node, file);
-    let json = JSON.stringify([type, name, size]);
-
-    if (deep) {
-      console.log(
-        INDENT_STRING.repeat(depth),
-        json.replace(/\]$/, ','));
-      inspectSubNodes(node, file, depth + 1);
-      console.log(INDENT_STRING.repeat(depth), '],');
-    } else {
-      console.log(INDENT_STRING.repeat(depth), json + ',');
-    }
+    let children = COMPOSITE_TSNODES.has(node.kind) ?
+      inspectSubNodes(node, file) : [];
+    treenodes.push({ name, type, size, children });
   });
+
+  return treenodes;
 }
 
 function parseTsConfig(projectDir: string): ts.ParsedCommandLine {
@@ -126,4 +129,5 @@ function getNodeSize(node: ts.Node, file: ts.SourceFile) {
   return node.getFullText(file).length;
 }
 
-parseTsProject(process.argv[2]);
+let tree = parseTsProject(process.argv[2]);
+console.log(JSON.stringify(tree, null, 2));
