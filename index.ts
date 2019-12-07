@@ -30,6 +30,14 @@ const COMPOSITE_TSNODES = new Set([
   ts.SyntaxKind.InterfaceDeclaration,
 ]);
 
+interface FileFormat {
+  format: 'vast';
+  version: string;
+  source: string;
+  timestamp: string;
+  vast: TreeNode;
+}
+
 interface TreeNode {
   name: string;
   type: string;
@@ -37,13 +45,13 @@ interface TreeNode {
   children?: TreeNode[];
 }
 
-function parseTsProject(projectDir: string): TreeNode {
+function parseTsProject(projectDir: string): FileFormat {
   if (!projectDir.endsWith('/'))
     projectDir += '/';
 
   let parsed = parseTsConfig(projectDir);
   let program = ts.createProgram(parsed.fileNames, parsed.options);
-  let tree: TreeNode = { name: projectDir, type: 'program', children: [] };
+  let tree: TreeNode = { name: '', type: 'program', children: [] };
 
   for (let file of program.getSourceFiles()) {
     if (EXCLUDED_FILEPATHS.test(file.fileName))
@@ -55,7 +63,13 @@ function parseTsProject(projectDir: string): TreeNode {
     tree.children!.push({ name, type, size, children });
   }
 
-  return tree;
+  return {
+    format: 'vast',
+    version: '1.0.0',
+    source: projectDir,
+    timestamp: new Date().toJSON(),
+    vast: tree,
+  };
 }
 
 function inspectSubNodes(root: ts.Node, file: ts.SourceFile): TreeNode[] {
