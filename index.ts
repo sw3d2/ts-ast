@@ -27,6 +27,7 @@ const EXCLUDED_TSNODES = new Set([
 const COMPOSITE_TSNODES = new Set([
   ts.SyntaxKind.ClassDeclaration,
   ts.SyntaxKind.ModuleDeclaration,
+  ts.SyntaxKind.ModuleBlock,
   ts.SyntaxKind.InterfaceDeclaration,
 ]);
 
@@ -45,13 +46,24 @@ interface TreeNode {
   children?: TreeNode[];
 }
 
-function parseTsProject(projectDir: string): FileFormat {
+function parseTsProject(projectDir: string, alreadyParsed = new Set<string>()): TreeNode | null {
   if (!projectDir.endsWith('/'))
     projectDir += '/';
 
+  if (alreadyParsed.has(projectDir))
+    return null;
+
+  alreadyParsed.add(projectDir);
+
+  if (isDebug())
+    console.warn('tsproject:', projectDir);
+
   let parsed = parseTsConfig(projectDir);
+  // if (isDebug()) console.error(parsed);
+
   let program = ts.createProgram(parsed.fileNames, parsed.options);
-  let tree: TreeNode = { name: '', type: 'program', children: [] };
+  let projectName = projectDir.split('/').slice(-2)[0];
+  let tree: TreeNode = { name: projectName, type: 'program', children: [] };
 
   for (let file of program.getSourceFiles()) {
     if (EXCLUDED_FILEPATHS.test(file.fileName))
@@ -63,13 +75,12 @@ function parseTsProject(projectDir: string): FileFormat {
     tree.children!.push({ name, type, size, children });
   }
 
-  return {
-    format: 'vast',
-    version: '1.0.0',
-    source: projectDir,
-    timestamp: new Date().toJSON(),
-    vast: tree,
-  };
+  for (let pref of parsed.projectReferences || []) {
+    let subtree = parseTsProject(pref.path, alreadyParsed);
+    if (subtree) tree.children!.push(subtree);
+  }
+
+  return tree;
 }
 
 function inspectSubNodes(root: ts.Node, file: ts.SourceFile): TreeNode[] {
@@ -134,6 +145,8 @@ function getNodeTypeName(node: ts.Node, file: ts.SourceFile) {
     return ['class', node.name?.text];
   if (ts.isModuleDeclaration(node))
     return ['module', node.name.text];
+  if (ts.isModuleBlock(node))
+    return ['module-block', ''];
   if (ts.isMethodSignature(node))
     return ['method', node.name.getText(file)];
   return [ts.SyntaxKind[node.kind] + ':' + node.kind, ''];
@@ -143,5 +156,21 @@ function getNodeSize(node: ts.Node, file: ts.SourceFile) {
   return node.getFullText(file).length;
 }
 
-let tree = parseTsProject(process.argv[2]);
-console.log(JSON.stringify(tree, null, 2));
+function isDebug() {
+  return process.argv[3] == '--debug';
+}
+
+function main() {
+  let pdir = process.argv[2];
+  let tree = parseTsProject(pdir);
+  let json = {
+    format: 'vast',
+    version: '1.0.0',
+    source: pdir,
+    timestamp: new Date().toJSON(),
+    vast: tree,
+  };
+  console.log(JSON.stringify(json, null, 2));
+}
+
+main();
