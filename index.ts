@@ -39,9 +39,21 @@ interface FileFormat {
   vast: TreeNode;
 }
 
+type NodeType =
+  | 'program'
+  | 'dir'
+  | 'file'
+  | 'module'
+  | 'module-block'
+  | 'class'
+  | 'interface'
+  | 'constructor'
+  | 'method'
+  | 'function';
+
 interface TreeNode {
   name: string;
-  type: string;
+  type: NodeType;
   size?: number;
   children?: TreeNode[];
 }
@@ -70,9 +82,11 @@ function parseTsProject(projectDir: string, alreadyParsed = new Set<string>()): 
       continue;
 
     let [type, filepath, size] = getNodeSummary(file, file);
-    let name = filepath.replace(projectDir, '');
+    let relpath = filepath.replace(projectDir, '');
+    let name = relpath.split('/').slice(-1)[0];
     let children = inspectSubNodes(file, file);
-    tree.children!.push({ name, type, size, children });
+    let node: TreeNode = { name, type, size, children };
+    insertFileNode(tree, node, relpath);
   }
 
   for (let pref of parsed.projectReferences || []) {
@@ -81,6 +95,26 @@ function parseTsProject(projectDir: string, alreadyParsed = new Set<string>()): 
   }
 
   return tree;
+}
+
+function insertFileNode(tree: TreeNode, node: TreeNode, relpath: string) {
+  let i = relpath.indexOf('/');
+  let dirname = i < 0 ? null : relpath.slice(0, i);
+
+  if (!dirname) {
+    tree.children!.push(node);
+    return;
+  }
+
+  let dirnode = tree.children!.find(
+    x => x.type == 'dir' && x.name == dirname);
+
+  if (!dirnode) {
+    dirnode = { type: 'dir', name: dirname, children: [] };
+    tree.children!.push(dirnode);
+  }
+
+  insertFileNode(dirnode, node, relpath.slice(i + 1));
 }
 
 function inspectSubNodes(root: ts.Node, file: ts.SourceFile): TreeNode[] {
@@ -124,13 +158,13 @@ function parseTsConfig(projectDir: string): ts.ParsedCommandLine {
   return parsed;
 }
 
-function getNodeSummary(node: ts.Node, file: ts.SourceFile): [string, string, number] {
+function getNodeSummary(node: ts.Node, file: ts.SourceFile): [NodeType, string, number] {
   let [type, name] = getNodeTypeName(node, file);
   let size = getNodeSize(node, file);
   return [type!, name!, size];
 }
 
-function getNodeTypeName(node: ts.Node, file: ts.SourceFile) {
+function getNodeTypeName(node: ts.Node, file: ts.SourceFile): [NodeType, string] {
   if (ts.isSourceFile(node))
     return ['file', node.fileName];
   if (ts.isConstructorDeclaration(node))
@@ -138,18 +172,18 @@ function getNodeTypeName(node: ts.Node, file: ts.SourceFile) {
   if (ts.isMethodDeclaration(node))
     return ['method', node.name.getText(file)];
   if (ts.isFunctionDeclaration(node))
-    return ['function', node.name?.text];
+    return ['function', node.name?.text!];
   if (ts.isInterfaceDeclaration(node))
-    return ['interface', node.name.text];
+    return ['interface', node.name.text!];
   if (ts.isClassDeclaration(node))
-    return ['class', node.name?.text];
+    return ['class', node.name?.text!];
   if (ts.isModuleDeclaration(node))
     return ['module', node.name.text];
   if (ts.isModuleBlock(node))
     return ['module-block', ''];
   if (ts.isMethodSignature(node))
     return ['method', node.name.getText(file)];
-  return [ts.SyntaxKind[node.kind] + ':' + node.kind, ''];
+  return [(ts.SyntaxKind[node.kind] + ':' + node.kind) as any, ''];
 }
 
 function getNodeSize(node: ts.Node, file: ts.SourceFile) {
