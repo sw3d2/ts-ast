@@ -1,6 +1,13 @@
 {
+  "name": "ts-ast",
+  "version": "1.0.0",
+  "main": "./jsbin/index.js",
+  "bin": {
+    "ts-ast": "./sh/ts-ast"
+  },
   "scripts": {
-    "test": "tsc && node jsbin sample.ts"
+    "preinstall": "tsc",
+    "test": "tsc && node jsbin ."
   },
   "dependencies": {
     "@types/node": "12.12.14",

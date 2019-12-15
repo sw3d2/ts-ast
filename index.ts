@@ -1,5 +1,6 @@
 import * as ts from "typescript";
 
+const VERSION = '1.0.0';
 const TSCONFIG_FILENAME = 'tsconfig.json';
 const EXCLUDED_FILEPATHS = /\/node_modules\//;
 
@@ -194,7 +195,17 @@ function isDebug() {
   return process.argv[3] == '--debug';
 }
 
+function printHelp() {
+  console.log('ts-ast v' + VERSION);
+}
+
 function main() {
+  if (process.argv.length < 3) {
+    printHelp();
+    return;
+  }
+
+
   let pdir = process.argv[2];
   let tree = parseTsProject(pdir);
   let json = {
