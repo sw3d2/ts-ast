@@ -1,8 +1,11 @@
 import * as ts from "typescript";
+import * as glob from "glob";
 
 const VERSION = '1.0.0';
 const TSCONFIG_FILENAME = 'tsconfig.json';
 const EXCLUDED_FILEPATHS = /\/node_modules\//;
+const GLOB_PATTERN = '**/*.{js,ts}';
+const CMD_OPT_DEBUG = '--debug';
 
 const EXCLUDED_TSNODES = new Set([
   ts.SyntaxKind.EndOfFileToken,
@@ -32,6 +35,12 @@ const COMPOSITE_TSNODES = new Set([
   ts.SyntaxKind.InterfaceDeclaration,
 ]);
 
+const DEFAULT_COMPILER_OPTIONS: ts.CompilerOptions = {
+  "lib": ["es2017"],
+  "allowJs": true,
+  "noImplicitAny": false,
+};
+
 interface FileFormat {
   format: 'vast';
   version: string;
@@ -59,6 +68,23 @@ interface TreeNode {
   children?: TreeNode[];
 }
 
+interface TsConfigSubset {
+  options: ts.CompilerOptions;
+  fileNames: string[];
+  projectReferences?: readonly ts.ProjectReference[];
+}
+
+const log = new class Logger {
+  i(...args) {
+    console.log(...args);
+  }
+
+  d(...args) {
+    if (isDebug())
+      console.debug(...args);
+  }
+};
+
 function parseTsProject(projectDir: string, alreadyParsed = new Set<string>()): TreeNode | null {
   if (!projectDir.endsWith('/'))
     projectDir += '/';
@@ -69,12 +95,12 @@ function parseTsProject(projectDir: string, alreadyParsed = new Set<string>()): 
   alreadyParsed.add(projectDir);
 
   if (isDebug())
-    console.warn('tsproject:', projectDir);
+    console.debug('tsproject:', projectDir);
 
-  let parsed = parseTsConfig(projectDir);
+  let tsConfig = parseTsConfig(projectDir);
   // if (isDebug()) console.error(parsed);
 
-  let program = ts.createProgram(parsed.fileNames, parsed.options);
+  let program = ts.createProgram(tsConfig.fileNames, tsConfig.options);
   let projectName = projectDir.split('/').slice(-2)[0];
   let tree: TreeNode = { name: projectName, type: 'program', children: [] };
 
@@ -90,7 +116,7 @@ function parseTsProject(projectDir: string, alreadyParsed = new Set<string>()): 
     insertFileNode(tree, node, relpath);
   }
 
-  for (let pref of parsed.projectReferences || []) {
+  for (let pref of tsConfig.projectReferences || []) {
     let subtree = parseTsProject(pref.path, alreadyParsed);
     if (subtree) tree.children!.push(subtree);
   }
@@ -134,11 +160,15 @@ function inspectSubNodes(root: ts.Node, file: ts.SourceFile): TreeNode[] {
   return treenodes;
 }
 
-function parseTsConfig(projectDir: string): ts.ParsedCommandLine {
-  let tsConfigPath = ts.findConfigFile(
-    projectDir,
-    ts.sys.fileExists,
-    TSCONFIG_FILENAME);
+function parseTsConfig(projectDir: string): TsConfigSubset {
+  let tsConfigPath = projectDir + TSCONFIG_FILENAME;
+
+  if (!ts.sys.fileExists(tsConfigPath)) {
+    log.d(`${TSCONFIG_FILENAME} doesnt exist`);
+    return generateTsConfig(projectDir);
+  }
+
+  log.d(`Parsing ${tsConfigPath}`);
 
   let configFile = ts.readConfigFile(
     tsConfigPath!,
@@ -156,7 +186,20 @@ function parseTsConfig(projectDir: string): ts.ParsedCommandLine {
     parseConfigHost,
     projectDir);
 
+  log.d(`${parsed.fileNames.length} ts files found`);
   return parsed;
+}
+
+function generateTsConfig(projectDir: string): TsConfigSubset {
+  log.d(`Searching for ${GLOB_PATTERN}`);
+  let files = glob.sync(projectDir + GLOB_PATTERN);
+  log.d(`${files.length} files found`);
+
+  return {
+    fileNames: files,
+    projectReferences: [],
+    options: DEFAULT_COMPILER_OPTIONS,
+  };
 }
 
 function getNodeSummary(node: ts.Node, file: ts.SourceFile): [NodeType, string, number] {
@@ -192,7 +235,7 @@ function getNodeSize(node: ts.Node, file: ts.SourceFile) {
 }
 
 function isDebug() {
-  return process.argv[3] == '--debug';
+  return process.argv[3] == CMD_OPT_DEBUG;
 }
 
 function printHelp() {
@@ -205,16 +248,16 @@ function main() {
     return;
   }
 
-
   let pdir = process.argv[2];
-  let tree = parseTsProject(pdir);
-  let json = {
+  let tree = parseTsProject(pdir)!;
+  let json: FileFormat = {
     format: 'vast',
     version: '1.0.0',
     source: pdir,
     timestamp: new Date().toJSON(),
     vast: tree,
   };
+
   console.log(JSON.stringify(json, null, 2));
 }
 

@@ -7,10 +7,13 @@
   },
   "scripts": {
     "preinstall": "tsc",
-    "test": "tsc && node jsbin ."
+    "test-js": "tsc && node jsbin /tmp/sw3d/test --debug",
+    "test-ts": "tsc && node jsbin . --debug"
   },
   "dependencies": {
     "@types/node": "12.12.14",
+    "@types/glob": "7.1.1",
+    "glob": "7.1.6",
     "typescript": "3.7.3"
   }
 }
