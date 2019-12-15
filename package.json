@@ -6,7 +6,7 @@
     "ts-ast": "./sh/ts-ast"
   },
   "scripts": {
-    "postinstall": "tsc",
+    "prepublish": "tsc",
     "test-js": "tsc && node jsbin /tmp/sw3d/test --debug",
     "test-ts": "tsc && node jsbin . --debug"
   },
