@@ -1,18 +1,18 @@
 {
   "name": "ast-typescript",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Parses TS/JS projects",
   "main": "./jsbin/index.js",
-  "bin": "./sh/ts-ast",
+  "bin": "sh/cli",
   "scripts": {
     "prepare": "tsc",
-    "test-js": "tsc && node jsbin /tmp/sw3d/test --debug",
-    "test-ts": "tsc && node jsbin . --debug"
+    "test": "sh/cli -p test --debug"
   },
   "dependencies": {
     "@types/node": "12.12.14",
     "@types/glob": "7.1.1",
     "glob": "7.1.6",
+    "commander": "4.0.1",
     "typescript": "3.7.3"
   }
 }

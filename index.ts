@@ -1,18 +1,15 @@
-import * as ts from "typescript";
-import * as glob from "glob";
+import * as ts from 'typescript';
+import * as glob from 'glob';
+import * as commander from 'commander';
 
-const VERSION = '1.0.0';
 const TSCONFIG_FILENAME = 'tsconfig.json';
 const EXCLUDED_FILEPATHS = /\/node_modules\//;
 const GLOB_PATTERN = '**/*.{js,ts}';
-const CMD_OPT_DEBUG = '--debug';
 
 const EXCLUDED_TSNODES = new Set([
   ts.SyntaxKind.EndOfFileToken,
-  ts.SyntaxKind.VariableStatement,
   ts.SyntaxKind.ImportDeclaration,
   ts.SyntaxKind.TypeAliasDeclaration,
-  ts.SyntaxKind.ExpressionStatement,
   ts.SyntaxKind.Decorator,
   ts.SyntaxKind.Identifier,
   ts.SyntaxKind.IndexSignature,
@@ -23,15 +20,23 @@ const EXCLUDED_TSNODES = new Set([
   ts.SyntaxKind.DeclareKeyword,
   ts.SyntaxKind.PropertySignature,
   ts.SyntaxKind.TypeParameter,
-  ts.SyntaxKind.IfStatement,
   ts.SyntaxKind.ExportAssignment,
-  ts.SyntaxKind.CallSignature,
 ]);
 
 const COMPOSITE_TSNODES = new Set([
   ts.SyntaxKind.ClassDeclaration,
   ts.SyntaxKind.ModuleDeclaration,
+  ts.SyntaxKind.FunctionDeclaration,
+  ts.SyntaxKind.Block,
   ts.SyntaxKind.ModuleBlock,
+  ts.SyntaxKind.WhileStatement,
+  ts.SyntaxKind.ForInStatement,
+  ts.SyntaxKind.ForOfStatement,
+  ts.SyntaxKind.ForStatement,
+  ts.SyntaxKind.ExpressionStatement,
+  ts.SyntaxKind.CallExpression,
+  ts.SyntaxKind.FunctionExpression,
+  ts.SyntaxKind.ArrowFunction,
   ts.SyntaxKind.InterfaceDeclaration,
 ]);
 
@@ -80,10 +85,11 @@ const log = new class Logger {
   }
 
   d(...args) {
-    if (isDebug())
-      console.debug(...args);
+    cargs.debug && console.debug(...args);
   }
 };
+
+const cargs = parseCommandLineArgs();
 
 function parseTsProject(projectDir: string, alreadyParsed = new Set<string>()): TreeNode | null {
   if (!projectDir.endsWith('/'))
@@ -93,9 +99,7 @@ function parseTsProject(projectDir: string, alreadyParsed = new Set<string>()): 
     return null;
 
   alreadyParsed.add(projectDir);
-
-  if (isDebug())
-    console.debug('tsproject:', projectDir);
+  log.d('tsproject:', projectDir);
 
   let tsConfig = parseTsConfig(projectDir);
   // if (isDebug()) console.error(parsed);
@@ -152,9 +156,11 @@ function inspectSubNodes(root: ts.Node, file: ts.SourceFile): TreeNode[] {
       return;
 
     let [type, name, size] = getNodeSummary(node, file);
-    let children = COMPOSITE_TSNODES.has(node.kind) ?
-      inspectSubNodes(node, file) : [];
-    treenodes.push({ name, type, size, children });
+    let deep = COMPOSITE_TSNODES.has(node.kind);
+    let children = deep ? inspectSubNodes(node, file) : [];
+
+    if (name || deep || cargs.addUnnamedLeafs)
+      treenodes.push({ name, type, size, children });
   });
 
   return treenodes;
@@ -234,21 +240,25 @@ function getNodeSize(node: ts.Node, file: ts.SourceFile) {
   return node.getFullText(file).length;
 }
 
-function isDebug() {
-  return process.argv[3] == CMD_OPT_DEBUG;
+interface CommandLineArgs {
+  debug: boolean;
+  project: string;
+  addUnnamedLeafs: boolean;
 }
 
-function printHelp() {
-  console.log('ts-ast v' + VERSION);
+function parseCommandLineArgs(): CommandLineArgs {
+  return commander
+    .option('-d, --debug', 'Debug logging')
+    .option('--add-unnamed-leafs')
+    .option('-p, --project <s>', 'Project dir')
+    .parse(process.argv) as any as CommandLineArgs;
 }
 
 function main() {
-  if (process.argv.length < 3) {
-    printHelp();
-    return;
-  }
+  if (!cargs.project)
+    commander.help();
 
-  let pdir = process.argv[2];
+  let pdir = cargs.project;
   let tree = parseTsProject(pdir)!;
   let json: FileFormat = {
     format: 'vast',
