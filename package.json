@@ -1,11 +1,9 @@
 {
-  "name": "ts-ast",
+  "name": "ast-typescript",
   "version": "1.0.0",
   "description": "Parses TS/JS projects",
   "main": "./jsbin/index.js",
-  "bin": {
-    "ts-ast": "./sh/ts-ast"
-  },
+  "bin": "./sh/ts-ast",
   "scripts": {
     "prepare": "tsc",
     "test-js": "tsc && node jsbin /tmp/sw3d/test --debug",
