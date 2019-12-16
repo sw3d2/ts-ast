@@ -1,12 +1,12 @@
 {
   "name": "ast-typescript",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Parses TS/JS projects",
   "main": "./jsbin/index.js",
   "bin": "sh/cli",
   "scripts": {
     "prepare": "tsc",
-    "test": "sh/cli -p test --debug"
+    "test": "tsc && sh/cli -p test --debug"
   },
   "dependencies": {
     "@types/node": "12.12.14",

@@ -24,11 +24,13 @@ const EXCLUDED_TSNODES = new Set([
 ]);
 
 const COMPOSITE_TSNODES = new Set([
-  ts.SyntaxKind.ClassDeclaration,
   ts.SyntaxKind.ModuleDeclaration,
-  ts.SyntaxKind.FunctionDeclaration,
-  ts.SyntaxKind.Block,
   ts.SyntaxKind.ModuleBlock,
+  ts.SyntaxKind.ClassDeclaration,
+  ts.SyntaxKind.InterfaceDeclaration,
+]);
+
+const EXTRA_COMPOSITE_NODES = new Set([
   ts.SyntaxKind.WhileStatement,
   ts.SyntaxKind.ForInStatement,
   ts.SyntaxKind.ForOfStatement,
@@ -37,7 +39,8 @@ const COMPOSITE_TSNODES = new Set([
   ts.SyntaxKind.CallExpression,
   ts.SyntaxKind.FunctionExpression,
   ts.SyntaxKind.ArrowFunction,
-  ts.SyntaxKind.InterfaceDeclaration,
+  ts.SyntaxKind.FunctionDeclaration,
+  ts.SyntaxKind.Block,
 ]);
 
 const DEFAULT_COMPILER_OPTIONS: ts.CompilerOptions = {
@@ -148,6 +151,16 @@ function insertFileNode(tree: TreeNode, node: TreeNode, relpath: string) {
   insertFileNode(dirnode, node, relpath.slice(i + 1));
 }
 
+function isComposite(node: ts.Node) {
+  if (COMPOSITE_TSNODES.has(node.kind))
+    return true;
+  
+  if (cargs.expandFunctions && EXTRA_COMPOSITE_NODES.has(node.kind))
+    return true;
+
+  return false;
+}
+
 function inspectSubNodes(root: ts.Node, file: ts.SourceFile): TreeNode[] {
   let treenodes: TreeNode[] = [];
 
@@ -156,7 +169,7 @@ function inspectSubNodes(root: ts.Node, file: ts.SourceFile): TreeNode[] {
       return;
 
     let [type, name, size] = getNodeSummary(node, file);
-    let deep = COMPOSITE_TSNODES.has(node.kind);
+    let deep = isComposite(node);
     let children = deep ? inspectSubNodes(node, file) : [];
 
     if (name || deep || cargs.addUnnamedLeafs)
@@ -243,6 +256,7 @@ function getNodeSize(node: ts.Node, file: ts.SourceFile) {
 interface CommandLineArgs {
   debug: boolean;
   project: string;
+  expandFunctions: boolean;
   addUnnamedLeafs: boolean;
 }
 
@@ -250,6 +264,7 @@ function parseCommandLineArgs(): CommandLineArgs {
   return commander
     .option('-d, --debug', 'Debug logging')
     .option('--add-unnamed-leafs')
+    .option('--expand-functions')
     .option('-p, --project <s>', 'Project dir')
     .parse(process.argv) as any as CommandLineArgs;
 }
