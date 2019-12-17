@@ -5,6 +5,7 @@ import * as commander from 'commander';
 const TSCONFIG_FILENAME = 'tsconfig.json';
 const EXCLUDED_FILEPATHS = /\/node_modules\//;
 const GLOB_PATTERN = '**/*.{js,ts}';
+const BATCH_FILES = 256;
 
 const EXCLUDED_TSNODES = new Set([
   ts.SyntaxKind.EndOfFileToken,
@@ -105,27 +106,30 @@ function parseTsProject(projectDir: string, alreadyParsed = new Set<string>()): 
   log.d('tsproject:', projectDir);
 
   let tsConfig = parseTsConfig(projectDir);
-  // if (isDebug()) console.error(parsed);
-
-  let program = ts.createProgram(tsConfig.fileNames, tsConfig.options);
   let projectName = projectDir.split('/').slice(-2)[0];
   let tree: TreeNode = { name: projectName, type: 'program', children: [] };
 
-  for (let file of program.getSourceFiles()) {
-    if (EXCLUDED_FILEPATHS.test(file.fileName))
-      continue;
+  for (let baseFile = 0; baseFile < tsConfig.fileNames.length; baseFile += BATCH_FILES) {
+    log.d('processing batch:', baseFile / BATCH_FILES);
+    let fileNamesBatch = tsConfig.fileNames.slice(baseFile, baseFile + BATCH_FILES);
+    let program = ts.createProgram(fileNamesBatch, tsConfig.options);
 
-    let [type, filepath, size] = getNodeSummary(file, file);
-    let relpath = filepath.replace(projectDir, '');
-    let name = relpath.split('/').slice(-1)[0];
-    let children = inspectSubNodes(file, file);
-    let node: TreeNode = { name, type, size, children };
-    insertFileNode(tree, node, relpath);
-  }
+    for (let file of program.getSourceFiles()) {
+      if (EXCLUDED_FILEPATHS.test(file.fileName))
+        continue;
 
-  for (let pref of tsConfig.projectReferences || []) {
-    let subtree = parseTsProject(pref.path, alreadyParsed);
-    if (subtree) tree.children!.push(subtree);
+      let [type, filepath, size] = getNodeSummary(file, file);
+      let relpath = filepath.replace(projectDir, '');
+      let name = relpath.split('/').slice(-1)[0];
+      let children = inspectSubNodes(file, file);
+      let node: TreeNode = { name, type, size, children };
+      insertFileNode(tree, node, relpath);
+    }
+
+    for (let pref of tsConfig.projectReferences || []) {
+      let subtree = parseTsProject(pref.path, alreadyParsed);
+      if (subtree) tree.children!.push(subtree);
+    }
   }
 
   return tree;
@@ -154,7 +158,7 @@ function insertFileNode(tree: TreeNode, node: TreeNode, relpath: string) {
 function isComposite(node: ts.Node) {
   if (COMPOSITE_TSNODES.has(node.kind))
     return true;
-  
+
   if (cargs.expandFunctions && EXTRA_COMPOSITE_NODES.has(node.kind))
     return true;
 

@@ -1,6 +1,6 @@
 {
   "name": "ast-typescript",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Parses TS/JS projects",
   "main": "./jsbin/index.js",
   "bin": "sh/cli",
