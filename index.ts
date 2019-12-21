@@ -54,6 +54,7 @@ interface FileFormat {
   format: 'vast';
   version: string;
   source: string;
+  colors: HexColors;
   timestamp: string;
   vast: TreeNode;
 }
@@ -69,6 +70,22 @@ type NodeType =
   | 'constructor'
   | 'method'
   | 'function';
+
+interface HexColors {
+  [nodeType: string]: string;
+}
+
+const DEFAULT_COLORS: HexColors = {
+  'program': '#f0f',
+  'dir': '#0ff',
+  'file': '#00f',
+  'module': '#00c',
+  'interface': '#0c0',
+  'class': '#0f0',
+  'constructor': '#800',
+  'method': '#c00',
+  'function': '#f00',
+};
 
 interface TreeNode {
   name: string;
@@ -283,6 +300,7 @@ function main() {
     format: 'vast',
     version: '1.0.0',
     source: pdir,
+    colors: DEFAULT_COLORS,
     timestamp: new Date().toJSON(),
     vast: tree,
   };
