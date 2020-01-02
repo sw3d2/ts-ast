@@ -1,8 +1,9 @@
 {
   "name": "ast-typescript",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Parses TS/JS projects",
   "main": "./jsbin/index.js",
+  "typings": "./jsbin/index.d.ts",
   "bin": "sh/cli",
   "scripts": {
     "prepare": "tsc",

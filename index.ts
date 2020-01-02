@@ -1,6 +1,11 @@
 import * as ts from 'typescript';
+import * as fspath from 'path';
 import * as glob from 'glob';
 import * as commander from 'commander';
+
+interface SourceFile2 extends ts.SourceFile {
+  resolvedModules: Map<string, { resolvedFileName: string }>;
+}
 
 const TSCONFIG_FILENAME = 'tsconfig.json';
 const EXCLUDED_FILEPATHS = /\/node_modules\//;
@@ -50,7 +55,7 @@ const DEFAULT_COMPILER_OPTIONS: ts.CompilerOptions = {
   "noImplicitAny": false,
 };
 
-interface FileFormat {
+export interface FileFormat {
   format: 'vast';
   version: string;
   source: string;
@@ -59,7 +64,7 @@ interface FileFormat {
   vast: TreeNode;
 }
 
-type NodeType =
+export type NodeType =
   | 'program'
   | 'dir'
   | 'file'
@@ -69,9 +74,10 @@ type NodeType =
   | 'interface'
   | 'constructor'
   | 'method'
-  | 'function';
+  | 'function'
+  | 'text';
 
-interface HexColors {
+export interface HexColors {
   [nodeType: string]: string;
 }
 
@@ -87,10 +93,11 @@ const DEFAULT_COLORS: HexColors = {
   'function': '#f00',
 };
 
-interface TreeNode {
+export interface TreeNode {
   name: string;
   type: NodeType;
   size?: number;
+  deps?: string[];
   children?: TreeNode[];
 }
 
@@ -139,7 +146,9 @@ function parseTsProject(projectDir: string, alreadyParsed = new Set<string>()): 
       let relpath = filepath.replace(projectDir, '');
       let name = relpath.split('/').slice(-1)[0];
       let children = inspectSubNodes(file, file);
+      let deps = getNodeDeps(file);
       let node: TreeNode = { name, type, size, children };
+      if (deps) node.deps = deps;
       insertFileNode(tree, node, relpath);
     }
 
@@ -267,11 +276,41 @@ function getNodeTypeName(node: ts.Node, file: ts.SourceFile): [NodeType, string]
     return ['module-block', ''];
   if (ts.isMethodSignature(node))
     return ['method', node.name.getText(file)];
+  if (ts.isStringLiteral(node))
+    return ['text', node.text];
   return [(ts.SyntaxKind[node.kind] + ':' + node.kind) as any, ''];
 }
 
 function getNodeSize(node: ts.Node, file: ts.SourceFile) {
   return node.getFullText(file).length;
+}
+
+function getNodeDeps(node: ts.Node): string[] | null {
+  if (ts.isSourceFile(node))
+    return getImports(node);
+  return null;
+}
+
+function getImports(file: ts.SourceFile) {
+  let deps: string[] = [];
+
+  ts.forEachChild(file, node => {
+    if (!ts.isImportDeclaration(node))
+      return;
+    let name = node.moduleSpecifier;
+    if (!ts.isStringLiteral(name))
+      return;
+    let importPath = name.text;
+    let fullPath = (file as SourceFile2).resolvedModules
+      .get(importPath)?.resolvedFileName;
+    if (!fullPath)
+      return;
+    let basePath = cargs.project;
+    let relPath = fspath.relative(basePath, fullPath);
+    deps.push(relPath);
+  });
+
+  return deps;
 }
 
 interface CommandLineArgs {
